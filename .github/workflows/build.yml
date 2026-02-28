@@ -18,7 +18,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 缓存 Buildozer 的整个工作目录（包含 SDK、NDK 等），加速后续构建
       - name: Cache Buildozer
         uses: actions/cache@v4
         with:
@@ -27,47 +26,39 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildozer-
 
-      # 安装系统依赖（注意已将 libtinfo5 替换为 libtinfo6）
       - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 cmake libffi-dev libssl-dev wget
+          sudo apt install -y \
+            git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev \
+            libncurses5-dev libncursesw5-dev libtinfo6 cmake libffi-dev libssl-dev wget
           pip install --user buildozer cython
 
-      # 安装 Android 命令行工具（sdkmanager），并自动接受许可证
       - name: Install Android Command Line Tools (sdkmanager)
         run: |
-          # 设置 ANDROID_HOME 为 Buildozer 的默认 SDK 路径
           echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
           mkdir -p $ANDROID_HOME/cmdline-tools
-          # 下载最新的命令行工具包（版本号 11076708 对应 2024 年更新，可自行替换）
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
           unzip -q cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
-          # zip 解压后会多一层 cmdline-tools 目录，将其内容移动到 latest/
           mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          # 自动接受所有许可证
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          # 将 sdkmanager 所在目录加入 PATH，供后续步骤使用
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
-      # 安装 Android 构建工具（含 aidl）、平台工具和对应平台的 SDK
       - name: Install Android Build Tools and Platform Tools
         run: |
-          # 安装 build-tools（版本 34.0.0，可根据 buildozer.spec 中 android.api 调整）
-          sdkmanager "build-tools;34.0.0"
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-34"
-          # 将 build-tools 目录加入 PATH，确保 aidl 可被 Buildozer 找到
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platform-tools" "platforms;android-34"
           echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
 
-      # 执行 Buildozer 打包
+      - name: 检查 aidl 是否安装
+        run: |
+          ls $ANDROID_HOME/build-tools/34.0.0/aidl
+
       - name: Build with Buildozer
         run: |
           buildozer android debug
         env:
-          BUILDZER_SDK_MANAGER_ACCEPT_LICENSES: "true"
+          BUILDOZER_SDK_MANAGER_ACCEPT_LICENSES: "true"
 
-      # 上传生成的 APK 文件
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
